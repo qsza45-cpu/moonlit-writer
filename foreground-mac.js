@@ -1,2 +1,3 @@
-ObjC.import('AppKit');ObjC.import('Foundation');
-function run(){while(true){try{var name=$.NSWorkspace.sharedWorkspace.frontmostApplication.localizedName.js;var line=JSON.stringify({name:name})+'\n';$.NSFileHandle.fileHandleWithStandardOutput.writeData($(line).dataUsingEncoding($.NSUTF8StringEncoding))}catch(e){}$.NSThread.sleepForTimeInterval(.2)}}
+ObjC.import('AppKit');ObjC.import('Foundation');ObjC.import('stdlib');
+// 런루프를 돌려야 NSWorkspace의 frontmostApplication이 갱신된다. sleep만 하면 처음 앱 이름에 고정된다.
+function run(){var ws=$.NSWorkspace.sharedWorkspace,out=$.NSFileHandle.fileHandleWithStandardOutput;while(true){var until=$.NSDate.dateWithTimeIntervalSinceNow(.2);$.NSRunLoop.currentRunLoop.runUntilDate(until);var left=until.timeIntervalSinceNow;if(left>0)$.NSThread.sleepForTimeInterval(left);var name='';try{var front=ws.frontmostApplication;if(!front.isNil())name=front.localizedName.js||''}catch(e){}try{out.writeData($(JSON.stringify({name:name})+'\n').dataUsingEncoding($.NSUTF8StringEncoding))}catch(e){$.exit(0)}}}

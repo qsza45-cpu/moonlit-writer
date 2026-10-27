@@ -1,0 +1,51 @@
+name: macOS build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm test
+      - run: node build-mac.cjs
+      - name: SHA-256
+        run: cd release && shasum -a 256 WritingTimer_macOS_Universal.zip | tee WritingTimer_macOS_Universal.zip.sha256
+      - name: Smoke test (Apple Silicon)
+        run: bash scripts/mac-smoke.sh release/WritingTimer_macOS_Universal.zip qa
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: WritingTimer_macOS_Universal
+          path: |
+            release/WritingTimer_macOS_Universal.zip
+            release/WritingTimer_macOS_Universal.zip.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qa-arm64
+          path: qa/
+
+  test-intel:
+    needs: build
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: WritingTimer_macOS_Universal
+          path: release
+      - name: Smoke test (Intel)
+        run: bash scripts/mac-smoke.sh release/WritingTimer_macOS_Universal.zip qa
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qa-x64
+          path: qa/
