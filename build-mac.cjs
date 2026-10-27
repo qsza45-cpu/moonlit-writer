@@ -23,7 +23,9 @@ function run(cmd,args){return execFileSync(cmd,args,{encoding:'utf8',stdio:['ign
 (async()=>{
  const {packager}=require('@electron/packager');
  fs.rmSync(outDir,{recursive:true,force:true});fs.mkdirSync(outDir,{recursive:true});
- const [dir]=await packager({dir:__dirname,name:'Moonlit Writer',platform:'darwin',arch:archArg,out:path.join(outDir,'build'),overwrite:true,asar:false,prune:true,ignore:p=>!allowed(p),appBundleId:'studio.sol.moonlitwriter',appCategoryType:'public.app-category.productivity',appVersion:pkg.version,buildVersion:pkg.version,darwinDarkModeSupport:true});
+ const [dir]=await packager({dir:__dirname,name:'Moonlit Writer',platform:'darwin',arch:archArg,out:path.join(outDir,'build'),overwrite:true,asar:false,prune:true,ignore:p=>!allowed(p),appBundleId:'studio.sol.moonlitwriter',appCategoryType:'public.app-category.productivity',appVersion:pkg.version,buildVersion:pkg.version,darwinDarkModeSupport:true,
+  // 키 입력 모듈은 arm64·x64용 파일이 각각 따로 들어 있어 합치지 않고 그대로 둔다.
+  osxUniversal:{x64ArchFiles:'Contents/Resources/app/node_modules/uiohook-napi/prebuilds/**'}});
  const app=path.join(dir,'Moonlit Writer.app');
  // 애드혹 서명: 개발자 인증서 없이 번들 무결성 봉인만 한다(공증 아님). Apple Silicon은 서명 없는 코드를 실행하지 않는다.
  run('codesign',['--force','--deep','--sign','-','--timestamp=none',app]);
