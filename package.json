@@ -1,5 +1,6 @@
 {
   "name": "moonlit-writer",
+  "productName": "Moonlit Writer",
   "version": "1.3.0",
   "description": "A quiet moonlit writing timer",
   "author": "SOL",
