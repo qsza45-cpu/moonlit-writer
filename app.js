@@ -1,0 +1,55 @@
+const $=id=>document.getElementById(id),key='moonlit-writer-v1';
+let data;try{data=JSON.parse(localStorage.getItem(key))}catch{}data=data&&typeof data==='object'?data:{};
+data.settings={focus:25,break:5,goal:2000,...data.settings};data.days=data.days||{};
+for(const [k,min,max]of [['focus',1,180],['break',1,60],['goal',1,10000000]])data.settings[k]=Math.min(max,Math.max(min,Number(data.settings[k])||min));
+let mode='focus',page=0,pinned=true,ctx,noise,gain,sound='off',lastStamp=Date.now();const timer=new Timer(data.settings.focus*60);
+function dateKey(d=new Date()){return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
+function day(k=dateKey()){return data.days[k]||(data.days[k]={seconds:0,chars:0,sessions:0})}
+function tell(message){$('notice').textContent=message;clearTimeout(tell.timeout);tell.timeout=setTimeout(()=>{$('notice').textContent=''},4000)}
+function save(){try{localStorage.setItem(key,JSON.stringify(data))}catch{tell('저장 공간이 부족해요')}}
+function add(used,start){if(mode!=='focus'||!used)return;let end=start+used*1000;while(start<end){let next=new Date(start);next.setHours(24,0,0,0);let boundary=Math.min(end,next.getTime());day(dateKey(new Date(start))).seconds+=(boundary-start)/1000;start=boundary}}
+function streak(){let n=0,d=new Date();const worked=k=>(typingState.days[k]||0)>0||(data.days[k]?.chars||0)>0;if(!worked(dateKey(d)))d.setDate(d.getDate()-1);while(n<100000&&worked(dateKey(d))){n++;d.setDate(d.getDate()-1)}return n}
+function render(){const seconds=Math.ceil(timer.remaining);$('time').textContent=String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');$('progress').style.strokeDashoffset=603.19*(1-timer.remaining/timer.duration);$('start').textContent=timer.running?'Ⅱ':'▶';$('start').setAttribute('aria-label',timer.running?'일시정지':'집중 시작');$('modeLabel').textContent=mode==='focus'?'집중하는 시간':'쉬어가는 시간';$('focus').classList.toggle('selected',mode==='focus');$('break').classList.toggle('selected',mode==='break');let r=day();$('today').textContent=Math.floor((typingState?.seconds||0)/60)+'분';$('sessions').textContent='완료한 집중 '+r.sessions+'회';$('streak').textContent=streak()?streak()+'일째 이어 쓰는 이야기':'새로운 첫 페이지';if(document.activeElement!==$('chars'))$('chars').value=r.chars;$('goalLabel').textContent='목표 '+data.settings.goal.toLocaleString()+'자 · 직접 기록';$('goalProgress').max=data.settings.goal;$('goalProgress').value=r.chars}
+function settle(){const now=Date.now(),was=timer.running,before=timer.remaining;let used=timer.tick(now);add(used,lastStamp);lastStamp=now;if(was&&before>0&&!timer.running){if(mode==='focus')day().sessions++;chime();window.desktop?.notify(mode==='focus'?'집중을 마쳤어요. 잠시 쉬어가세요.':'휴식을 마쳤어요. 다시 써볼까요?');tell('완료! '+(mode==='focus'?'잠시 쉬어가요':'다시 써볼까요'))}save();render()}
+function toggle(){settle();if(timer.running)timer.pause(Date.now());else{if(!timer.remaining)timer.reset(data.settings[mode]*60);timer.start(Date.now());lastStamp=Date.now()}render()}
+function change(next){settle();mode=next;timer.reset(data.settings[mode]*60);render()}
+function go(n){page=(n+6)%6;document.querySelectorAll('.page').forEach(e=>e.hidden=Number(e.dataset.page)!==page);document.querySelectorAll('[data-go]').forEach(e=>e.classList.toggle('active',Number(e.dataset.go)===page));$('notice').textContent='';if(page===4){$('focusMinutes').value=data.settings.focus;$('breakMinutes').value=data.settings.break;$('dailyGoal').value=data.settings.goal}}
+$('prev').onclick=()=>go(page-1);$('next').onclick=()=>go(page+1);document.querySelectorAll('[data-go]').forEach(e=>e.onclick=()=>go(Number(e.dataset.go)));
+let wheelLock=0;$('widget').addEventListener('wheel',e=>{if(e.target.closest('input')||!e.target.closest('.content,.ring,.arrow,nav'))return;e.preventDefault();if(Date.now()-wheelLock>400){go(page+(e.deltaY>0?1:-1));wheelLock=Date.now()}},{passive:false});
+$('start').onclick=toggle;$('reset').onclick=()=>{settle();timer.reset();tell('오늘 기록은 유지돼요');render()};$('focus').onclick=()=>change('focus');$('break').onclick=()=>change('break');
+$('chars').onchange=()=>{day().chars=Math.min(10000000,Math.max(0,Number($('chars').value)||0));save();render()};
+$('configForm').onsubmit=e=>{e.preventDefault();settle();data.settings={focus:Number($('focusMinutes').value),break:Number($('breakMinutes').value),goal:Number($('dailyGoal').value)};timer.reset(data.settings[mode]*60);save();go(1);tell('설정을 저장했어요');render()};
+$('pin').onclick=async()=>{if(window.desktop)pinned=await window.desktop.pin(!pinned);$('pin').setAttribute('aria-pressed',pinned)};
+$('close').onclick=()=>window.desktop?.close();$('minimize').onclick=()=>window.desktop?.minimize();document.addEventListener('contextmenu',e=>{e.preventDefault();window.desktop?.menu()});
+$('export').onclick=()=>{settle();const dates=[...new Set([...Object.keys(data.days),...Object.keys(typingState.days)])].sort();let csv='\ufeff날짜,자동집필분,집중타이머분,글자수,완료집중\r\n'+dates.map(k=>{const v=data.days[k]||{seconds:0,chars:0,sessions:0};return [k,((typingState.days[k]||0)/60).toFixed(2),(v.seconds/60).toFixed(2),v.chars,v.sessions].join(',')}).join('\r\n');let url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='MoonlitWriter-'+dateKey()+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+document.addEventListener('keydown',e=>{if(e.target.closest('input,button'))return;if(e.code==='Space'&&page===1){e.preventDefault();toggle()}else if(e.key==='ArrowRight')go(page+1);else if(e.key==='ArrowLeft')go(page-1)});
+window.desktop?.onSleep(()=>{settle();timer.pause(Date.now());render()});window.addEventListener('beforeunload',()=>{settle();save()});setInterval(settle,1000);go(0);
+function audio(){if(!ctx)ctx=new AudioContext();ctx.resume();return ctx}
+function chime(){const c=audio();for(let i=0;i<3;i++){const o=c.createOscillator(),g=c.createGain(),t=c.currentTime+i*.18;o.frequency.value=[523.25,659.25,783.99][i];g.gain.setValueAtTime(.12,t);g.gain.exponentialRampToValueAtTime(.001,t+.8);o.connect(g).connect(c.destination);o.start(t);o.stop(t+.8)}}
+function playSound(next){noise?.stop();noise=null;sound=next;document.querySelectorAll('[data-sound]').forEach(b=>b.classList.toggle('selected',b.dataset.sound===sound));if(next==='off')return;const c=audio(),buffer=c.createBuffer(1,c.sampleRate*8,c.sampleRate),samples=buffer.getChannelData(0);let last=0;for(let i=0;i<samples.length;i++){last=(last+(Math.random()*2-1)*.02)/1.02;samples[i]=next==='rain'?last*3:last*(.8+.6*Math.sin(i/c.sampleRate*1.1))}noise=c.createBufferSource();noise.buffer=buffer;noise.loop=true;const f=c.createBiquadFilter();f.type='lowpass';f.frequency.value=next==='rain'?4000:700;gain=c.createGain();gain.gain.value=Number($('volume').value)/100;noise.connect(f).connect(gain).connect(c.destination);noise.start()}
+document.querySelectorAll('[data-sound]').forEach(b=>b.onclick=()=>playSound(b.dataset.sound));$('volume').oninput=()=>{if(gain)gain.gain.value=Number($('volume').value)/100};
+
+
+let widgetScale=1,isFolded=false,drag=null;
+function widgetState(s){widgetScale=s.scale;$('widgetSize').value=Math.round(s.scale*100);$('sizeValue').textContent=Math.round(s.scale*100)+'%';pinned=s.pinned;isFolded=s.folded;document.body.classList.toggle('folded',isFolded);document.querySelector('.compact-art').src=isFolded?'assets/compact-closed.png':'assets/compact.png';$('fold').setAttribute('aria-label',isFolded?'뚜껑 열기':'뚜껑 닫기');$('fold').title=isFolded?'뚜껑 열기':'뚜껑 닫기';$('pin').setAttribute('aria-pressed',pinned)}
+window.desktop?.onState(widgetState);window.desktop?.state().then(widgetState);
+async function fold(){if(window.desktop)await window.desktop.fold(!isFolded);else widgetState({scale:widgetScale,pinned,folded:!isFolded})}
+$('fold').onclick=fold;const lid=document.querySelector('.drag');
+lid.addEventListener('pointerdown',e=>{if(e.button!==0)return;drag={x:e.screenX,y:e.screenY,moved:false};lid.setPointerCapture(e.pointerId);window.desktop?.dragStart(e.screenX,e.screenY)});
+lid.addEventListener('pointermove',e=>{if(!drag)return;if(Math.hypot(e.screenX-drag.x,e.screenY-drag.y)>5)drag.moved=true;if(drag.moved)window.desktop?.dragMove(e.screenX,e.screenY)});
+function finishDrag(e){if(!drag)return;const clicked=!drag.moved;drag=null;window.desktop?.dragEnd();if(lid.hasPointerCapture(e.pointerId))lid.releasePointerCapture(e.pointerId);if(clicked&&e.type==='pointerup')fold()}
+lid.addEventListener('pointerup',finishDrag);lid.addEventListener('pointercancel',finishDrag);
+$('widget').addEventListener('wheel',e=>{if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();e.stopImmediatePropagation();widgetScale=Math.min(1.6,Math.max(.6,widgetScale+(e.deltaY<0?.05:-.05)));window.desktop?.resize(widgetScale)},{passive:false,capture:true});
+
+let typingState={seconds:0,days:{},enabled:true,state:'starting',active:false,targets:[]};
+function renderTyping(){const s=Math.floor(typingState.seconds||0);$('typingTime').textContent=[Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(n=>String(n).padStart(2,'0')).join(':');$('typingStatus').textContent=typingState.state==='permission'?'맥 손쉬운 사용 권한이 필요해요':typingState.state==='hook-error'?'입력 감지를 다시 확인해 주세요':typingState.state==='foreground-error'?'집필 앱 확인을 다시 시도해 주세요':!typingState.enabled?'자동 측정이 꺼져 있어요':typingState.active?'● 타이핑 시간을 기록하는 중':typingState.state==='starting'?'입력 감지를 준비하는 중':'집필 앱의 타이핑을 기다려요';$('typingStatus').classList.toggle('active',typingState.active);$('typingToggle').textContent=typingState.enabled?'자동 측정 켜짐':'자동 측정 꺼짐';$('typingToggle').setAttribute('aria-pressed',typingState.enabled);$('today').textContent=Math.floor(s/60)+'분';}
+function receiveTyping(v){typingState=v;renderTyping();if(document.activeElement!==$('targetsInput'))$('targetsInput').value=(v.targets||[]).join(', ')}
+window.desktop?.onTyping(receiveTyping);window.desktop?.typing().then(receiveTyping);
+$('typingToggle').onclick=async()=>{if(window.desktop)receiveTyping(await window.desktop.typingToggle(!typingState.enabled))};
+$('typingRetry').onclick=async()=>{if(window.desktop)receiveTyping(await window.desktop.typingRetry())};
+$('targetsForm').onsubmit=async e=>{e.preventDefault();const names=$('targetsInput').value.split(/[,\n]/).map(x=>x.trim()).filter(Boolean);if(!names.length)return;if(window.desktop)receiveTyping(await window.desktop.typingTargets(names));go(0);tell('측정 앱을 저장했어요')};
+$('toTyping').onclick=()=>go(0);
+render();renderTyping();
+
+$('widgetSize').oninput=()=>{widgetScale=Number($('widgetSize').value)/100;$('sizeValue').textContent=Math.round(widgetScale*100)+'%';window.desktop?.resize(widgetScale)};
+window.desktop?.startup().then(s=>{$('startup').checked=s.enabled});$('startup').onchange=async()=>{if(!window.desktop)return;const s=await window.desktop.startupSet($('startup').checked);$('startup').checked=s.enabled;tell(s.ok?(s.enabled?'로그인 시 자동 실행돼요':'자동 실행을 껐어요'):'자동 실행 등록을 확인해 주세요')};

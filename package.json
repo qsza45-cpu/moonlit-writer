@@ -1,0 +1,45 @@
+{
+  "name": "moonlit-writer",
+  "version": "1.3.0",
+  "description": "A quiet moonlit writing timer",
+  "author": "SOL",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "node build-mac.cjs",
+    "test": "node --test test.cjs",
+    "build:windows": "node build-windows.cjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "archiver": "^8.0.0",
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "studio.sol.moonlitwriter",
+    "productName": "Moonlit Writer",
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "index.html",
+      "app.js",
+      "style.css",
+      "timer.cjs",
+      "assets/**/*",
+      "tracking.cjs",
+      "tracking-worker.cjs",
+      "foreground.ps1",
+      "foreground-mac.js"
+    ],
+    "mac": {
+      "target": "zip",
+      "identity": null,
+      "category": "public.app-category.productivity"
+    },
+    "artifactName": "MoonlitWriter-${arch}.zip"
+  },
+  "dependencies": {
+    "uiohook-napi": "^1.5.5"
+  }
+}
